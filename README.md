@@ -1,19 +1,14 @@
----
-AIGC:
-    ContentProducer: Minimax Agent AI
-    ContentPropagator: Minimax Agent AI
-    Label: AIGC
-    ProduceID: "00000000000000000000000000000000"
-    PropagateID: "00000000000000000000000000000000"
-    ReservedCode1: 30450221009d10b76dd9f8a5821b265016aa24c125bf41d38596149b519e49a14c9bdcf825022030b6eda7db1034c1b4af3ff492c6196fabcef5ac34a0b74094cdfed92bfb0c69
-    ReservedCode2: 30450220550dea07d4bfbb41686329867bd34722e3a574a2a66f3fc010e6021ab4a8ff5f022100f5270e880a87797f0fa23b10677e761504cfa5f286f5547128809e84068d2ea3
----
+# OpenClaw Skills
 
-# OpenClaw Skills - Phase 1-2
+[![GitHub](https://img.shields.io/badge/GitHub-rc8314%2Fopenclaw--skills-blue)](https://github.com/rc8314/openclaw-skills)
+[![Status](https://img.shields.io/badge/status-stable-success)](https://github.com/rc8314/openclaw-skills)
+[![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+
+增强 OpenClaw 的跨会话记忆和方案确认追踪能力。
 
 ## 项目概述
 
-开发两个经典 Skills，增强 OpenClaw 的跨会话记忆和方案确认追踪能力。
+两个生产级 Skills，解决 AI 助手在多会话场景下的上下文断层问题。
 
 ## Skills 列表
 
@@ -26,6 +21,11 @@ AIGC:
 - 新会话中主动恢复上下文
 - 支持跨设备记忆访问
 
+**使用场景：**
+- 用户手机聊到一半，换电脑继续
+- 跨天对话时自动提醒未完成的讨论
+- 多设备同步对话状态
+
 ### 2. scheme-confirmation
 方案确认与追踪机制 - 确保重要方案得到用户确认，并追踪执行状态。
 
@@ -35,6 +35,11 @@ AIGC:
 - 提醒用户确认和执行
 - 追踪方案执行状态
 
+**使用场景：**
+- AI 提出方案后，等待用户明确确认
+- 长期任务的状态追踪
+- 避免"说过了但忘了执行"的情况
+
 ## 目录结构
 
 ```
@@ -42,11 +47,11 @@ openclaw-skills/
 ├── cross-session-memory/    # 跨会话记忆 Skill
 │   ├── skill.yaml           # Skill 定义
 │   ├── main.py              # 主逻辑（~350行）
-│   └── README.md            # 说明文档
+│   └── README.md            # 详细说明
 ├── scheme-confirmation/     # 方案确认 Skill
 │   ├── skill.yaml           # Skill 定义
 │   ├── main.py              # 主逻辑（~500行）
-│   └── README.md            # 说明文档
+│   └── README.md            # 详细说明
 ├── tests/                   # 测试用例
 │   └── test_skills.py       # 完整测试套件
 ├── docs/                    # 文档
@@ -59,6 +64,10 @@ openclaw-skills/
 ### 安装
 
 ```bash
+# 克隆仓库
+git clone https://github.com/rc8314/openclaw-skills.git
+cd openclaw-skills
+
 # 复制 skills 到 OpenClaw 目录
 mkdir -p ~/.openclaw/skills
 cp -r cross-session-memory scheme-confirmation ~/.openclaw/skills/
@@ -80,9 +89,22 @@ python3 tests/test_skills.py
 3. **自动检测**：智能识别话题和方案
 4. **完整测试覆盖**：10+ 测试用例，全部通过
 
-## 状态
+## 项目状态
 
-- ✅ cross-session-memory: 开发完成，测试通过
-- ✅ scheme-confirmation: 开发完成，测试通过
-- ✅ 安装文档: 已完成
-- ✅ 测试套件: 已完成
+| Skill | 状态 | 测试 |
+|-------|------|------|
+| cross-session-memory | ✅ 稳定 | 10+ 用例通过 |
+| scheme-confirmation | ✅ 稳定 | 10+ 用例通过 |
+
+## 贡献
+
+欢迎提交 Issue 和 PR！
+
+## 许可证
+
+MIT License - 详见 [LICENSE](LICENSE)
+
+---
+
+**作者**: [rc8314](https://github.com/rc8314)  
+**项目**: [openclaw-skills](https://github.com/rc8314/openclaw-skills)

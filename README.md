@@ -4,15 +4,98 @@
 [![Status](https://img.shields.io/badge/status-stable-success)](https://github.com/rc8314/openclaw-skills)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
+[English](#english) | [中文](#中文)
+
+---
+
+<a name="english"></a>
+## English
+
+Enhance OpenClaw with cross-session memory and scheme confirmation tracking capabilities.
+
+### Overview
+
+Two production-ready Skills that solve the context fragmentation problem of AI assistants in multi-session scenarios.
+
+### Skills
+
+#### 1. cross-session-memory
+Cross-device topic memory continuation - enables seamless conversation context across different sessions.
+
+**Features:**
+- Auto-detect and extract key topics from conversations
+- Persistent topic memory storage
+- Proactive context recovery in new sessions
+- Cross-device memory access
+
+**Use Cases:**
+- Continue conversation from phone to computer
+- Auto-remind unfinished discussions across days
+- Multi-device conversation state sync
+
+#### 2. scheme-confirmation
+Scheme confirmation and tracking mechanism - ensures important proposals get user confirmation and tracks execution status.
+
+**Features:**
+- Auto-recognize proposals/suggestions in conversations
+- Manage proposal lifecycle (proposed → confirmed → executed → completed)
+- Remind users to confirm and execute
+- Track proposal execution status
+
+**Use Cases:**
+- Wait for explicit user confirmation after AI proposes a plan
+- Long-term task status tracking
+- Avoid "said but forgot to execute" situations
+
+### Quick Start
+
+```bash
+# Clone repository
+git clone https://github.com/rc8314/openclaw-skills.git
+cd openclaw-skills
+
+# Copy skills to OpenClaw directory
+mkdir -p ~/.openclaw/skills
+cp -r cross-session-memory scheme-confirmation ~/.openclaw/skills/
+```
+
+See [docs/installation.md](docs/installation.md) for details.
+
+### Testing
+
+```bash
+python3 tests/test_skills.py
+```
+
+### Project Status
+
+| Skill | Status | Tests |
+|-------|--------|-------|
+| cross-session-memory | ✅ Stable | 10+ passed |
+| scheme-confirmation | ✅ Stable | 10+ passed |
+
+### Contributing
+
+Issues and PRs are welcome!
+
+### License
+
+MIT License - see [LICENSE](LICENSE)
+
+---
+
+<a name="中文"></a>
+## 中文
+
 增强 OpenClaw 的跨会话记忆和方案确认追踪能力。
 
-## 项目概述
+### 项目概述
 
 两个生产级 Skills，解决 AI 助手在多会话场景下的上下文断层问题。
 
-## Skills 列表
+### Skills 列表
 
-### 1. cross-session-memory
+#### 1. cross-session-memory（跨会话记忆）
 跨设备话题记忆延续 - 让用户在不同会话间无缝衔接对话上下文。
 
 **核心功能：**
@@ -26,7 +109,7 @@
 - 跨天对话时自动提醒未完成的讨论
 - 多设备同步对话状态
 
-### 2. scheme-confirmation
+#### 2. scheme-confirmation（方案确认）
 方案确认与追踪机制 - 确保重要方案得到用户确认，并追踪执行状态。
 
 **核心功能：**
@@ -40,28 +123,7 @@
 - 长期任务的状态追踪
 - 避免"说过了但忘了执行"的情况
 
-## 目录结构
-
-```
-openclaw-skills/
-├── cross-session-memory/    # 跨会话记忆 Skill
-│   ├── skill.yaml           # Skill 定义
-│   ├── main.py              # 主逻辑（~350行）
-│   └── README.md            # 详细说明
-├── scheme-confirmation/     # 方案确认 Skill
-│   ├── skill.yaml           # Skill 定义
-│   ├── main.py              # 主逻辑（~500行）
-│   └── README.md            # 详细说明
-├── tests/                   # 测试用例
-│   └── test_skills.py       # 完整测试套件
-├── docs/                    # 文档
-│   └── installation.md      # 安装文档
-└── README.md                # 本文件
-```
-
-## 快速开始
-
-### 安装
+### 快速开始
 
 ```bash
 # 克隆仓库
@@ -78,33 +140,25 @@ cp -r cross-session-memory scheme-confirmation ~/.openclaw/skills/
 ### 测试
 
 ```bash
-cd /workspace/projects/openclaw-skills
 python3 tests/test_skills.py
 ```
 
-## 技术亮点
-
-1. **模块化设计**：每个 Skill 独立，可单独使用
-2. **完整状态管理**：支持状态流转和持久化
-3. **自动检测**：智能识别话题和方案
-4. **完整测试覆盖**：10+ 测试用例，全部通过
-
-## 项目状态
+### 项目状态
 
 | Skill | 状态 | 测试 |
 |-------|------|------|
 | cross-session-memory | ✅ 稳定 | 10+ 用例通过 |
 | scheme-confirmation | ✅ 稳定 | 10+ 用例通过 |
 
-## 贡献
+### 贡献
 
 欢迎提交 Issue 和 PR！
 
-## 许可证
+### 许可证
 
 MIT License - 详见 [LICENSE](LICENSE)
 
 ---
 
-**作者**: [rc8314](https://github.com/rc8314)  
-**项目**: [openclaw-skills](https://github.com/rc8314/openclaw-skills)
+**Author/作者**: [rc8314](https://github.com/rc8314)  
+**Project/项目**: [openclaw-skills](https://github.com/rc8314/openclaw-skills)

@@ -1,0 +1,42 @@
+name: scheme-confirmation
+description: 方案确认与追踪机制 - 确保重要方案得到用户确认，并追踪执行状态
+version: 1.0.0
+author: OpenClaw
+
+# 触发器
+triggers:
+  - type: event
+    event: message.received
+  - type: cron
+    schedule: "0 */2 * * *"  # 每2小时检查待确认方案
+  - type: command
+    command: /scheme
+
+# 配置
+config:
+  confirmation_timeout:
+    type: number
+    default: 3600
+    description: 确认超时时间（秒）
+  reminder_interval:
+    type: number
+    default: 7200
+    description: 提醒间隔（秒）
+  auto_detect:
+    type: boolean
+    default: true
+    description: 是否自动检测方案
+  max_active_schemes:
+    type: number
+    default: 20
+    description: 最大活跃方案数
+
+# 权限
+permissions:
+  - memory:read
+  - memory:write
+  - message:send
+
+# 依赖
+dependencies:
+  - cross-session-memory

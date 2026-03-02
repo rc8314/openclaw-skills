@@ -1,0 +1,41 @@
+name: cross-session-memory
+description: 跨设备话题记忆延续 - 自动检测话题中断，在新会话中主动恢复上下文
+version: 1.0.0
+author: OpenClaw
+
+# 触发器
+triggers:
+  - type: event
+    event: session.start
+  - type: event
+    event: message.received
+  - type: cron
+    schedule: "0 */6 * * *"  # 每6小时清理过期记忆
+
+# 配置
+config:
+  memory_ttl:
+    type: number
+    default: 86400
+    description: 记忆有效期（秒）
+  max_topics:
+    type: number
+    default: 10
+    description: 最大保存话题数
+  auto_resume:
+    type: boolean
+    default: true
+    description: 是否自动恢复话题
+  similarity_threshold:
+    type: number
+    default: 0.7
+    description: 话题相似度阈值
+
+# 权限
+permissions:
+  - memory:read
+  - memory:write
+  - session:read
+
+# 依赖
+dependencies: []

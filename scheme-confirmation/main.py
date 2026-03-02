@@ -116,7 +116,10 @@ class CompatibilitySchemeStore:
     def __init__(self, config: Optional[Dict] = None):
         self.config = config or {}
         self.compatibility_mode = self.config.get('compatibility_mode', True)
-        self.use_legacy_storage = self.config.get('use_legacy_storage', True)
+        self.use_legacy_storage = self.config.get('use_legacy_storage', False)  # 默认关闭
+        # 安全模式：默认只读取 Skill 自身创建的数据
+        self.safe_mode = self.config.get('safe_mode', True)
+        self.allowed_sources = self.config.get('allowed_sources', ['skill'])
         
         # Skill 自身存储
         skill_dir = os.path.expanduser("~/.openclaw/skills/scheme-confirmation")
@@ -128,11 +131,15 @@ class CompatibilitySchemeStore:
         self._load()
     
     def _load(self):
-        """加载方案 - 优先从现有系统读取"""
+        """加载方案 - 仅在非安全模式下读取现有系统数据"""
         loaded = False
         
-        if self.compatibility_mode:
+        if self.compatibility_mode and not self.safe_mode:
+            # 仅在非安全模式下读取现有系统数据
             loaded = self._load_from_legacy()
+        elif self.compatibility_mode and self.safe_mode:
+            # 安全模式：只读取标记为 skill 来源的数据
+            loaded = self._load_from_legacy_safe()
         
         if not loaded:
             self._load_from_skill()
@@ -254,7 +261,11 @@ class CompatibilitySchemeStore:
             print(f"[CompatibilitySchemeStore] 保存失败: {e}")
     
     def _sync_to_legacy(self):
-        """同步到现有系统路径"""
+        """同步到现有系统路径（仅在非安全模式下）"""
+        if self.safe_mode:
+            # 安全模式下不同步到现有系统
+            return
+        
         try:
             # 同步到 .pending-schemes.json
             legacy_data = {}
@@ -442,8 +453,10 @@ class SchemeConfirmation:
     
     DEFAULT_CONFIG = {
         'compatibility_mode': True,      # 兼容现有系统
-        'use_legacy_storage': True,      # 使用现有存储路径
-        'auto_detect': False,            # 默认关闭自动检测（避免误判）
+        'use_legacy_storage': False,     # 默认不使用现有存储（安全优先）
+        'safe_mode': True,               # 安全模式
+        'allowed_sources': ['skill'],    # 允许的数据源
+        'auto_detect': False,            # 默认关闭自动检测
         'auto_remind': False,            # 默认关闭自动提醒
         'confirmation_timeout': 3600,
         'reminder_interval': 7200,

@@ -20,12 +20,20 @@ config:
     description: 兼容现有系统模式
   use_legacy_storage:
     type: boolean
+    default: false
+    description: 使用现有存储路径（默认关闭，安全优先）
+  safe_mode:
+    type: boolean
     default: true
-    description: 使用现有存储路径
+    description: 安全模式（只读取skill创建的数据）
+  allowed_sources:
+    type: array
+    default: ["skill"]
+    description: 允许的数据源
   auto_resume:
     type: boolean
     default: false
-    description: 是否自动恢复话题（默认关闭，避免冲突）
+    description: 是否自动恢复话题（默认关闭）
   auto_save:
     type: boolean
     default: false

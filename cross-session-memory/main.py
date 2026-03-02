@@ -66,6 +66,9 @@ class CompatibilityStore:
         self.config = config or {}
         self.compatibility_mode = self.config.get('compatibility_mode', True)
         self.use_legacy_storage = self.config.get('use_legacy_storage', True)
+        # 安全模式：默认只读取 Skill 自身创建的数据
+        self.safe_mode = self.config.get('safe_mode', True)
+        self.allowed_sources = self.config.get('allowed_sources', ['skill'])
         
         # Skill 自身存储路径
         skill_dir = os.path.expanduser("~/.openclaw/skills/cross-session-memory")
@@ -77,16 +80,45 @@ class CompatibilityStore:
         self._load()
     
     def _load(self):
-        """加载记忆 - 优先从现有系统读取"""
+        """加载记忆 - 优先从现有系统读取（仅在安全模式下）"""
         loaded = False
         
-        if self.compatibility_mode:
-            # 1. 尝试从现有系统加载
+        if self.compatibility_mode and not self.safe_mode:
+            # 仅在非安全模式下读取现有系统数据
             loaded = self._load_from_legacy()
+        elif self.compatibility_mode and self.safe_mode:
+            # 安全模式：只读取带有 skill 标记的现有数据
+            loaded = self._load_from_legacy_safe()
         
         if not loaded:
-            # 2. 从 Skill 自身存储加载
+            # 从 Skill 自身存储加载
             self._load_from_skill()
+    
+    def _load_from_legacy_safe(self) -> bool:
+        """安全模式：只读取标记为 skill 来源的现有数据"""
+        try:
+            # 只读取 memory 目录中标记为 skill 创建的文件
+            memory_dir = self.LEGACY_PATHS['memory']
+            if memory_dir.exists():
+                for md_file in memory_dir.glob("*.md"):
+                    # 检查文件头是否包含 skill 标记
+                    if self._is_skill_created_file(md_file):
+                        topic = self._parse_memory_file(md_file)
+                        if topic:
+                            self._memories[topic.id] = topic
+            return len(self._memories) > 0
+        except Exception as e:
+            print(f"[CompatibilityStore] 安全模式加载失败: {e}")
+            return False
+    
+    def _is_skill_created_file(self, file_path: Path) -> bool:
+        """检查文件是否由 Skill 创建"""
+        try:
+            content = file_path.read_text(encoding='utf-8', errors='ignore')
+            # 检查文件头是否有 skill 标记
+            return '**来源**: skill' in content or '<!-- skill-created -->' in content
+        except:
+            return False
     
     def _load_from_legacy(self) -> bool:
         """从现有系统路径加载记忆"""
@@ -229,6 +261,8 @@ class CompatibilityStore:
             "",
             f"**创建时间**: {datetime.fromtimestamp(topic.created_at).strftime('%Y-%m-%d %H:%M')}",
             f"**来源**: {topic.source}",
+            "",
+            "<!-- skill-created -->",  # Skill 创建标记
             "",
             "## 摘要",
             topic.summary,
@@ -405,8 +439,10 @@ class CrossSessionMemory:
     
     DEFAULT_CONFIG = {
         'compatibility_mode': True,      # 兼容现有系统
-        'use_legacy_storage': True,      # 使用现有存储路径
-        'auto_resume': False,            # 默认关闭自动恢复（避免冲突）
+        'use_legacy_storage': False,     # 默认不使用现有存储（安全优先）
+        'safe_mode': True,               # 安全模式：只读取 skill 创建的数据
+        'allowed_sources': ['skill'],    # 允许的数据源
+        'auto_resume': False,            # 默认关闭自动恢复
         'auto_save': False,              # 默认关闭自动保存
         'memory_ttl': 86400,
         'max_topics': 10,

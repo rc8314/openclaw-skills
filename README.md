@@ -150,31 +150,29 @@ python3 tests/test_skills.py
 | cross-session-memory | ✅ 稳定 | 10+ 用例通过 |
 | scheme-confirmation | ✅ 稳定 | 10+ 用例通过 |
 
+### 安全性说明
+
+**默认安全模式** - 零隐私风险：
+- `safe_mode=true` - 只读取 Skill 自身创建的数据
+- `use_legacy_storage=false` - 不访问现有系统文件
+- **数据隔离** - 默认只使用 Skill 自身存储路径
+- **无 Token 消耗** - 纯本地处理，无 LLM 调用
+
+**可选的兼容模式**（需显式开启）：
+```python
+# 安全模式（默认）
+config = {'safe_mode': True}  # 只读取 skill 创建的数据
+
+# 兼容模式（需用户确认）
+config = {'safe_mode': False, 'use_legacy_storage': True}
+```
+
 ### 兼容性说明
 
-**零冲突安装** - 默认关闭自动功能，与现有系统完美兼容：
-- `auto_resume=false` - 不自动恢复话题
-- `auto_detect=false` - 不自动检测方案
-- `auto_remind=false` - 不自动提醒
-- **数据双向同步** - 读取现有系统数据，写入时同步到新旧路径
-
-**支持的数据源：**
-- `/workspace/memory/` - 现有记忆文件
-- `/workspace/diary/` - 日记文件
-- `/workspace/plans/active/` - 现有方案文件
-- `/workspace/.pending-schemes.json` - 现有方案追踪
-
-**渐进式启用：**
-```python
-# 阶段1：只读取现有数据（默认）
-config = {'compatibility_mode': True}
-
-# 阶段2：手动创建新话题/方案
-skill.manual_create(...)
-
-# 阶段3：确认稳定后开启自动功能
-config = {'auto_detect': True, 'auto_remind': True}
-```
+**渐进式启用**：
+1. **阶段1**（默认）：完全隔离，只使用 Skill 自身存储
+2. **阶段2**：手动创建新话题/方案
+3. **阶段3**（可选）：开启兼容模式，读取现有系统数据
 
 ### 贡献
 

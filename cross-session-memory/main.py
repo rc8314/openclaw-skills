@@ -1,6 +1,11 @@
 #!/usr/bin/env python3
 """
-Cross-Session Memory Skill - 跨会话记忆管理
+Cross-Session Memory Skill - 跨会话记忆管理（兼容版）
+
+兼容现有系统：
+1. 读取 /workspace/memory/ 现有记忆文件
+2. 读取 /workspace/diary/ 日记文件
+3. 写入时同步到现有路径和 Skill 路径
 
 功能：
 1. 检测并提取会话中的关键话题
@@ -11,6 +16,7 @@ Cross-Session Memory Skill - 跨会话记忆管理
 import json
 import os
 import time
+import re
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, asdict
@@ -29,6 +35,7 @@ class TopicMemory:
     updated_at: float
     session_key: str
     ttl: int = 86400  # 默认24小时
+    source: str = "skill"  # 来源：skill, memory, diary
     
     def is_expired(self) -> bool:
         """检查是否过期"""
@@ -39,23 +46,141 @@ class TopicMemory:
     
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'TopicMemory':
+        # 兼容旧格式（没有 source 字段）
+        if 'source' not in data:
+            data['source'] = 'skill'
         return cls(**data)
 
 
-class MemoryStore:
-    """记忆存储管理器"""
+class CompatibilityStore:
+    """兼容存储管理器 - 桥接现有系统和 Skill"""
     
-    def __init__(self, storage_dir: Optional[str] = None):
-        if storage_dir is None:
-            storage_dir = os.path.expanduser("~/.openclaw/skills/cross-session-memory")
-        self.storage_dir = Path(storage_dir)
-        self.storage_dir.mkdir(parents=True, exist_ok=True)
-        self.memories_file = self.storage_dir / "memories.json"
+    # 存储路径优先级（从高到低）
+    LEGACY_PATHS = {
+        'memory': Path("/workspace/memory"),
+        'diary': Path("/workspace/diary"),
+        'plans': Path("/workspace/plans/active"),
+    }
+    
+    def __init__(self, config: Optional[Dict] = None):
+        self.config = config or {}
+        self.compatibility_mode = self.config.get('compatibility_mode', True)
+        self.use_legacy_storage = self.config.get('use_legacy_storage', True)
+        
+        # Skill 自身存储路径
+        skill_dir = os.path.expanduser("~/.openclaw/skills/cross-session-memory")
+        self.skill_storage = Path(skill_dir)
+        self.skill_storage.mkdir(parents=True, exist_ok=True)
+        self.memories_file = self.skill_storage / "memories.json"
+        
         self._memories: Dict[str, TopicMemory] = {}
         self._load()
     
     def _load(self):
-        """从文件加载记忆"""
+        """加载记忆 - 优先从现有系统读取"""
+        loaded = False
+        
+        if self.compatibility_mode:
+            # 1. 尝试从现有系统加载
+            loaded = self._load_from_legacy()
+        
+        if not loaded:
+            # 2. 从 Skill 自身存储加载
+            self._load_from_skill()
+    
+    def _load_from_legacy(self) -> bool:
+        """从现有系统路径加载记忆"""
+        try:
+            # 读取 memory 目录的 markdown 文件
+            memory_dir = self.LEGACY_PATHS['memory']
+            if memory_dir.exists():
+                for md_file in memory_dir.glob("*.md"):
+                    topic = self._parse_memory_file(md_file)
+                    if topic:
+                        self._memories[topic.id] = topic
+            
+            # 读取 diary 目录
+            diary_dir = self.LEGACY_PATHS['diary']
+            if diary_dir.exists():
+                for md_file in diary_dir.glob("*.md"):
+                    topic = self._parse_diary_file(md_file)
+                    if topic:
+                        self._memories[topic.id] = topic
+            
+            return len(self._memories) > 0
+        except Exception as e:
+            print(f"[CompatibilityStore] 从现有系统加载失败: {e}")
+            return False
+    
+    def _parse_memory_file(self, file_path: Path) -> Optional[TopicMemory]:
+        """解析现有 memory 文件为 TopicMemory"""
+        try:
+            content = file_path.read_text(encoding='utf-8')
+            
+            # 提取标题（文件名或第一行）
+            title = file_path.stem
+            if content.strip():
+                first_line = content.strip().split('\n')[0]
+                if first_line.startswith('# '):
+                    title = first_line[2:]
+            
+            # 提取关键点（列表项）
+            key_points = re.findall(r'[-*]\s*(.+)', content)[:5]
+            
+            # 提取待办事项
+            pending_items = re.findall(r'(?:TODO|待办|待处理)[：:]?\s*(.+)', content, re.IGNORECASE)[:3]
+            
+            # 获取文件修改时间
+            mtime = file_path.stat().st_mtime
+            
+            topic_id = f"memory_{file_path.stem}_{int(mtime)}"
+            
+            return TopicMemory(
+                id=topic_id,
+                title=title[:50],
+                summary=content[:200].replace('\n', ' '),
+                key_points=key_points,
+                pending_items=pending_items,
+                created_at=mtime,
+                updated_at=mtime,
+                session_key="legacy",
+                source="memory"
+            )
+        except Exception as e:
+            print(f"[CompatibilityStore] 解析 memory 文件失败 {file_path}: {e}")
+            return None
+    
+    def _parse_diary_file(self, file_path: Path) -> Optional[TopicMemory]:
+        """解析 diary 文件为 TopicMemory"""
+        try:
+            content = file_path.read_text(encoding='utf-8')
+            
+            # 日记标题通常是日期
+            title = f"日记 {file_path.stem}"
+            
+            # 提取关键点
+            key_points = re.findall(r'[-*]\s*(.+)', content)[:5]
+            
+            mtime = file_path.stat().st_mtime
+            topic_id = f"diary_{file_path.stem}"
+            
+            return TopicMemory(
+                id=topic_id,
+                title=title,
+                summary=content[:200].replace('\n', ' '),
+                key_points=key_points,
+                pending_items=[],
+                created_at=mtime,
+                updated_at=mtime,
+                session_key="legacy",
+                source="diary"
+            )
+        except Exception as e:
+            print(f"[CompatibilityStore] 解析 diary 文件失败 {file_path}: {e}")
+            return None
+    
+    def _load_from_skill(self):
+        """从 Skill 自身存储加载"""
         if self.memories_file.exists():
             try:
                 with open(self.memories_file, 'r', encoding='utf-8') as f:
@@ -63,17 +188,66 @@ class MemoryStore:
                     for topic_id, topic_data in data.items():
                         self._memories[topic_id] = TopicMemory.from_dict(topic_data)
             except Exception as e:
-                print(f"[MemoryStore] 加载记忆失败: {e}")
+                print(f"[CompatibilityStore] 从 Skill 加载失败: {e}")
                 self._memories = {}
     
     def _save(self):
-        """保存记忆到文件"""
+        """保存记忆 - 同步到所有启用的路径"""
         try:
+            # 1. 保存到 Skill 自身存储
             data = {k: v.to_dict() for k, v in self._memories.items()}
             with open(self.memories_file, 'w', encoding='utf-8') as f:
                 json.dump(data, f, ensure_ascii=False, indent=2)
+            
+            # 2. 如果启用 legacy 模式，同步到现有系统
+            if self.use_legacy_storage:
+                self._sync_to_legacy()
+                
         except Exception as e:
-            print(f"[MemoryStore] 保存记忆失败: {e}")
+            print(f"[CompatibilityStore] 保存失败: {e}")
+    
+    def _sync_to_legacy(self):
+        """同步到现有系统路径"""
+        try:
+            # 只同步 skill 来源的记忆到 memory 目录
+            memory_dir = self.LEGACY_PATHS['memory']
+            memory_dir.mkdir(parents=True, exist_ok=True)
+            
+            for topic in self._memories.values():
+                if topic.source == "skill":
+                    # 转换为 markdown 格式写入
+                    md_content = self._topic_to_markdown(topic)
+                    md_file = memory_dir / f"{topic.id}.md"
+                    md_file.write_text(md_content, encoding='utf-8')
+        except Exception as e:
+            print(f"[CompatibilityStore] 同步到现有系统失败: {e}")
+    
+    def _topic_to_markdown(self, topic: TopicMemory) -> str:
+        """将 TopicMemory 转换为 Markdown 格式"""
+        lines = [
+            f"# {topic.title}",
+            "",
+            f"**创建时间**: {datetime.fromtimestamp(topic.created_at).strftime('%Y-%m-%d %H:%M')}",
+            f"**来源**: {topic.source}",
+            "",
+            "## 摘要",
+            topic.summary,
+            "",
+        ]
+        
+        if topic.key_points:
+            lines.extend(["## 关键点", ""])
+            for point in topic.key_points:
+                lines.append(f"- {point}")
+            lines.append("")
+        
+        if topic.pending_items:
+            lines.extend(["## 待处理", ""])
+            for item in topic.pending_items:
+                lines.append(f"- [ ] {item}")
+            lines.append("")
+        
+        return "\n".join(lines)
     
     def add(self, memory: TopicMemory) -> bool:
         """添加新记忆"""
@@ -92,6 +266,15 @@ class MemoryStore:
             m for m in self._memories.values()
             if now - m.updated_at <= max_age
         ]
+    
+    def get_recent(self, limit: int = 5) -> List[TopicMemory]:
+        """获取最近更新的记忆"""
+        sorted_memories = sorted(
+            self._memories.values(),
+            key=lambda m: m.updated_at,
+            reverse=True
+        )
+        return sorted_memories[:limit]
     
     def update(self, topic_id: str, **kwargs) -> bool:
         """更新记忆"""
@@ -114,28 +297,18 @@ class MemoryStore:
         return False
     
     def cleanup_expired(self) -> int:
-        """清理过期记忆，返回清理数量"""
+        """清理过期记忆"""
         expired = [k for k, v in self._memories.items() if v.is_expired()]
         for topic_id in expired:
             del self._memories[topic_id]
         if expired:
             self._save()
         return len(expired)
-    
-    def get_recent(self, limit: int = 5) -> List[TopicMemory]:
-        """获取最近更新的记忆"""
-        sorted_memories = sorted(
-            self._memories.values(),
-            key=lambda m: m.updated_at,
-            reverse=True
-        )
-        return sorted_memories[:limit]
 
 
 class TopicExtractor:
     """话题提取器 - 从对话中提取关键信息"""
     
-    # 关键词模式，用于识别话题类型
     TOPIC_PATTERNS = {
         'task': ['任务', '待办', 'todo', '需要', '计划', '安排'],
         'question': ['问题', '疑问', '怎么', '如何', '为什么', '吗？', '呢？'],
@@ -144,39 +317,19 @@ class TopicExtractor:
     }
     
     def __init__(self):
-        self.store = MemoryStore()
+        pass
     
     def extract_topic(self, session_key: str, messages: List[Dict]) -> Optional[TopicMemory]:
-        """
-        从消息列表中提取话题
-        
-        Args:
-            session_key: 会话标识
-            messages: 消息列表，每项包含 role 和 content
-        
-        Returns:
-            TopicMemory 对象或 None
-        """
+        """从消息列表中提取话题"""
         if not messages:
             return None
         
-        # 提取最后几条消息分析
         recent_msgs = messages[-5:] if len(messages) > 5 else messages
         
-        # 生成话题标题（取第一条用户消息的前20字）
         title = self._generate_title(recent_msgs)
-        
-        # 生成摘要
         summary = self._generate_summary(recent_msgs)
-        
-        # 提取关键点
         key_points = self._extract_key_points(recent_msgs)
-        
-        # 提取待办事项
         pending_items = self._extract_pending(recent_msgs)
-        
-        # 识别话题类型
-        topic_type = self._detect_topic_type(summary)
         
         topic_id = f"{session_key}_{int(time.time())}"
         
@@ -188,7 +341,8 @@ class TopicExtractor:
             pending_items=pending_items,
             created_at=time.time(),
             updated_at=time.time(),
-            session_key=session_key
+            session_key=session_key,
+            source="skill"
         )
     
     def _generate_title(self, messages: List[Dict]) -> str:
@@ -196,7 +350,6 @@ class TopicExtractor:
         for msg in messages:
             if msg.get('role') == 'user':
                 content = msg.get('content', '')
-                # 取前30个字符，去除换行
                 title = content.replace('\n', ' ')[:30]
                 if len(content) > 30:
                     title += '...'
@@ -205,7 +358,6 @@ class TopicExtractor:
     
     def _generate_summary(self, messages: List[Dict]) -> str:
         """生成话题摘要"""
-        # 简单实现：合并所有用户消息的前100字
         user_contents = []
         for msg in messages:
             if msg.get('role') == 'user':
@@ -220,21 +372,16 @@ class TopicExtractor:
     def _extract_key_points(self, messages: List[Dict]) -> List[str]:
         """提取关键点"""
         key_points = []
-        
         for msg in messages:
             content = msg.get('content', '')
-            # 简单的启发式规则
             lines = content.split('\n')
             for line in lines:
                 line = line.strip()
-                # 检测列表项
                 if line.startswith('- ') or line.startswith('* ') or line.startswith('• '):
                     key_points.append(line[2:])
-                # 检测数字列表
                 elif len(line) > 3 and line[0].isdigit() and line[1:3] in ['. ', '、']:
                     key_points.append(line[3:])
-        
-        return key_points[:5]  # 最多5个关键点
+        return key_points[:5]
     
     def _extract_pending(self, messages: List[Dict]) -> List[str]:
         """提取待办/待确认事项"""
@@ -246,88 +393,75 @@ class TopicExtractor:
             lines = content.split('\n')
             for line in lines:
                 line = line.strip()
-                # 检测包含待办关键词的行
                 if any(kw in line for kw in pending_keywords):
-                    if len(line) > 5:  # 过滤太短的行
+                    if len(line) > 5:
                         pending.append(line)
         
-        return list(set(pending))[:3]  # 去重，最多3个
-    
-    def _detect_topic_type(self, summary: str) -> str:
-        """检测话题类型"""
-        summary_lower = summary.lower()
-        scores = {}
-        
-        for topic_type, keywords in self.TOPIC_PATTERNS.items():
-            score = sum(1 for kw in keywords if kw in summary_lower)
-            scores[topic_type] = score
-        
-        if scores:
-            return max(scores, key=scores.get)
-        return 'general'
+        return list(set(pending))[:3]
 
 
 class CrossSessionMemory:
-    """跨会话记忆主类"""
+    """跨会话记忆主类（兼容版）"""
+    
+    DEFAULT_CONFIG = {
+        'compatibility_mode': True,      # 兼容现有系统
+        'use_legacy_storage': True,      # 使用现有存储路径
+        'auto_resume': False,            # 默认关闭自动恢复（避免冲突）
+        'auto_save': False,              # 默认关闭自动保存
+        'memory_ttl': 86400,
+        'max_topics': 10,
+        'similarity_threshold': 0.7,
+    }
     
     def __init__(self, config: Optional[Dict] = None):
-        self.config = config or {}
-        self.store = MemoryStore()
+        self.config = {**self.DEFAULT_CONFIG, **(config or {})}
+        self.store = CompatibilityStore(self.config)
         self.extractor = TopicExtractor()
-        self.memory_ttl = self.config.get('memory_ttl', 86400)
-        self.max_topics = self.config.get('max_topics', 10)
-        self.auto_resume = self.config.get('auto_resume', True)
     
     def on_session_start(self, session_key: str, user_message: str = "") -> Optional[str]:
         """
         会话开始时检查是否有可恢复的话题
-        
-        Returns:
-            恢复提示消息或 None
+        注意：默认 auto_resume=False，需要手动调用
         """
-        if not self.auto_resume:
+        if not self.config.get('auto_resume', False):
             return None
         
-        # 获取活跃记忆
-        active_memories = self.store.get_active(self.memory_ttl)
+        active_memories = self.store.get_active(self.config['memory_ttl'])
         
         if not active_memories:
             return None
         
-        # 按更新时间排序
         active_memories.sort(key=lambda m: m.updated_at, reverse=True)
         
-        # 检查用户新消息是否与已有话题相关
         if user_message:
             related = self._find_related_topic(user_message, active_memories)
             if related:
                 return self._generate_resume_prompt(related, is_related=True)
         
-        # 返回最近的话题
         most_recent = active_memories[0]
         time_diff = time.time() - most_recent.updated_at
         
-        # 如果时间间隔太短（<5分钟），不提示
-        if time_diff < 300:
+        if time_diff < 300:  # 5分钟内不提示
             return None
         
         return self._generate_resume_prompt(most_recent)
+    
+    def manual_resume_check(self, session_key: str, user_message: str = "") -> Optional[str]:
+        """手动检查可恢复话题（推荐用法）"""
+        return self.on_session_start(session_key, user_message)
     
     def _find_related_topic(self, message: str, memories: List[TopicMemory]) -> Optional[TopicMemory]:
         """查找与消息相关的话题"""
         message_lower = message.lower()
         
         for memory in memories:
-            # 简单的关键词匹配
             title_words = set(memory.title.lower().split())
             message_words = set(message_lower.split())
             
-            # 计算重叠词
             overlap = title_words & message_words
-            if len(overlap) >= 2:  # 至少2个词重叠
+            if len(overlap) >= 2:
                 return memory
             
-            # 检查关键点
             for point in memory.key_points:
                 if any(word in message_lower for word in point.lower().split()[:3]):
                     return memory
@@ -337,21 +471,20 @@ class CrossSessionMemory:
     def _generate_resume_prompt(self, memory: TopicMemory, is_related: bool = False) -> str:
         """生成恢复提示"""
         time_str = self._format_time_ago(time.time() - memory.updated_at)
+        source_icon = "💾" if memory.source == "memory" else "📔" if memory.source == "diary" else "💭"
         
         if is_related:
-            prompt = f"💡 看起来你在继续之前的话题「{memory.title}」\n"
+            prompt = f"{source_icon} 看起来你在继续之前的话题「{memory.title}」\n"
         else:
-            prompt = f"💭 {time_str}前我们讨论过：「{memory.title}」\n"
+            prompt = f"{source_icon} {time_str}前我们讨论过：「{memory.title}」\n"
         
         if memory.summary:
-            prompt += f"\n📋 摘要：{memory.summary}\n"
+            prompt += f"\n📋 摘要：{memory.summary[:100]}...\n"
         
         if memory.pending_items:
             prompt += f"\n⏳ 待处理：\n"
-            for item in memory.pending_items:
+            for item in memory.pending_items[:3]:
                 prompt += f"   • {item}\n"
-        
-        prompt += f"\n要继续这个话题吗？（回复「继续」或忽略此提示）"
         
         return prompt
     
@@ -365,28 +498,23 @@ class CrossSessionMemory:
             return f"{int(seconds / 86400)}天"
     
     def save_topic(self, session_key: str, messages: List[Dict]) -> Optional[str]:
-        """
-        保存当前话题
-        
-        Returns:
-            话题ID或None
-        """
+        """保存当前话题"""
         topic = self.extractor.extract_topic(session_key, messages)
         if topic:
-            # 清理旧话题（保持最大数量）
             self._cleanup_old_topics()
             self.store.add(topic)
             return topic.id
         return None
     
     def _cleanup_old_topics(self):
-        """清理旧话题，保持最大数量"""
-        all_topics = self.store.get_recent(self.max_topics * 2)
-        if len(all_topics) > self.max_topics:
-            # 删除最旧的话题
-            to_delete = all_topics[self.max_topics:]
+        """清理旧话题"""
+        max_topics = self.config.get('max_topics', 10)
+        all_topics = self.store.get_recent(max_topics * 2)
+        if len(all_topics) > max_topics:
+            to_delete = all_topics[max_topics:]
             for topic in to_delete:
-                self.store.delete(topic.id)
+                if topic.source == "skill":  # 只删除 skill 来源的
+                    self.store.delete(topic.id)
     
     def update_topic(self, topic_id: str, messages: List[Dict]) -> bool:
         """更新话题"""
@@ -394,7 +522,6 @@ class CrossSessionMemory:
         if not memory:
             return False
         
-        # 重新提取信息
         new_topic = self.extractor.extract_topic(memory.session_key, messages)
         if new_topic:
             self.store.update(
@@ -407,12 +534,23 @@ class CrossSessionMemory:
             return True
         return False
     
+    def list_topics(self, limit: int = 10) -> List[Dict]:
+        """列出所有话题（供手动查询）"""
+        topics = self.store.get_recent(limit)
+        return [{
+            'id': t.id,
+            'title': t.title,
+            'source': t.source,
+            'updated_at': datetime.fromtimestamp(t.updated_at).strftime('%Y-%m-%d %H:%M'),
+            'pending_count': len(t.pending_items)
+        } for t in topics]
+    
     def cleanup(self) -> int:
         """清理过期记忆"""
         return self.store.cleanup_expired()
 
 
-# 便捷函数，供外部调用
+# 便捷函数
 def create_skill(config: Optional[Dict] = None) -> CrossSessionMemory:
     """创建 Skill 实例"""
     return CrossSessionMemory(config)
@@ -428,3 +566,9 @@ def save_current_topic(session_key: str, messages: List[Dict], config: Optional[
     """保存当前话题的便捷函数"""
     skill = create_skill(config)
     return skill.save_topic(session_key, messages)
+
+
+def list_all_topics(limit: int = 10, config: Optional[Dict] = None) -> List[Dict]:
+    """列出所有话题的便捷函数"""
+    skill = create_skill(config)
+    return skill.list_topics(limit)

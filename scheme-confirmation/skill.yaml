@@ -14,6 +14,22 @@ triggers:
 
 # 配置
 config:
+  compatibility_mode:
+    type: boolean
+    default: true
+    description: 兼容现有系统模式
+  use_legacy_storage:
+    type: boolean
+    default: true
+    description: 使用现有存储路径
+  auto_detect:
+    type: boolean
+    default: false
+    description: 是否自动检测方案（默认关闭，避免误判）
+  auto_remind:
+    type: boolean
+    default: false
+    description: 是否自动提醒（默认关闭）
   confirmation_timeout:
     type: number
     default: 3600
@@ -22,10 +38,6 @@ config:
     type: number
     default: 7200
     description: 提醒间隔（秒）
-  auto_detect:
-    type: boolean
-    default: true
-    description: 是否自动检测方案
   max_active_schemes:
     type: number
     default: 20

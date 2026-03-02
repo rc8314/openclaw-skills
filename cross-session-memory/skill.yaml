@@ -14,6 +14,22 @@ triggers:
 
 # 配置
 config:
+  compatibility_mode:
+    type: boolean
+    default: true
+    description: 兼容现有系统模式
+  use_legacy_storage:
+    type: boolean
+    default: true
+    description: 使用现有存储路径
+  auto_resume:
+    type: boolean
+    default: false
+    description: 是否自动恢复话题（默认关闭，避免冲突）
+  auto_save:
+    type: boolean
+    default: false
+    description: 是否自动保存话题（默认关闭）
   memory_ttl:
     type: number
     default: 86400
@@ -22,10 +38,6 @@ config:
     type: number
     default: 10
     description: 最大保存话题数
-  auto_resume:
-    type: boolean
-    default: true
-    description: 是否自动恢复话题
   similarity_threshold:
     type: number
     default: 0.7
